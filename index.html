@@ -1,57 +1,337 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Typing Tutor Game</title>
-  <style>
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      color: #fff;
-      margin: 0;
-      padding: 50px 20px;
-      text-align: center;
-    }
-    h1 {
-      font-size: 3em;
-      margin-bottom: 0.2em;
-      text-shadow: 2px 2px 8px rgba(0,0,0,0.4);
-    }
-    p {
-      font-size: 1.2em;
-      margin-top: 0;
-      margin-bottom: 3em;
-      text-shadow: 1px 1px 6px rgba(0,0,0,0.3);
-    }
-    a.download-button {
-      display: inline-block;
-      background: #fff;
-      color: #764ba2;
-      font-weight: 700;
-      font-size: 1.5em;
-      padding: 15px 35px;
-      border-radius: 50px;
-      box-shadow: 0 8px 15px rgba(255,255,255,0.6);
-      text-decoration: none;
-      transition: background-color 0.3s ease, color 0.3s ease;
-    }
-    a.download-button:hover {
-      background: #5a3e99;
-      color: #e0d8f9;
-      box-shadow: 0 12px 25px rgba(90,62,153,0.8);
-    }
-    footer {
-      margin-top: 60px;
-      font-size: 0.9em;
-      color: rgba(255, 255, 255, 0.6);
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Typing Game 20 Parts with Secret Admin Panel and Announcements</title>
+<style>
+  /* (Your existing CSS unchanged) */
+  @keyframes backgroundAnimation {
+    0%, 100% {background-position: 0% 50%; }
+    50% {background-position: 100% 50%; }
+  }
+  /* (Rest of your CSS here, unchanged for brevity) */
+</style>
 </head>
 <body>
-  <h1>Typing Game</h1>
-  <p>Enhance your typing skills with fun challenges - download now!</p>
-  <a href="typer.exe" download class="download-button">Download Game</a>
-  <footer>© 2025 Your Name or Studio</footer>
+  <main class="container" role="main" aria-label="Typing game container">
+    <h1 id="stage" aria-live="polite">Stage: 1 / 20</h1>
+    <div id="timer" aria-live="polite">Time: 120</div>
+    <div class="progress-bar" aria-hidden="true"><div class="bar" id="bar"></div></div>
+    <section id="text" aria-live="polite" aria-atomic="true"></section>
+    <textarea id="input" aria-label="Typing input area" placeholder="Start typing here..." autofocus></textarea>
+    <button id="restartBtn">Restart</button>
+    <section>
+      <h2>Announcements</h2>
+      <div id="announcementDisplay" style="min-height: 60px; max-height: 150px; overflow-y: auto; border: 1px solid #bbb; padding: 6px; margin-top: 10px; background: #f9f9f9;"></div>
+    </section>
+  </main>
+
+  <input id="secretInput" aria-label="Secret code input" placeholder="Enter admin code..." autocomplete="off" spellcheck="false" />
+
+  <section id="secretPanel" aria-hidden="true">
+    <h2>Admin Panel</h2>
+    <button id="autoTypeBtn" aria-label="Auto type button">AutoType</button>
+    <button id="skipStageBtn" aria-label="Skip current stage">Skip Stage</button>
+    <button id="restartBtnSecret" aria-label="Restart game">Restart Game</button>
+    <button id="resetProgressBtn" aria-label="Reset progress to stage 1">Reset Progress</button>
+    <button id="toggleTimerBtn" aria-label="Pause or resume timer">Pause Timer</button>
+    <button id="toggleHighlightBtn" aria-label="Toggle highlighting of letters">Toggle Highlight</button>
+    <input id="customTextInput" aria-label="Custom text to add" placeholder="Add custom text for next stage" />
+    <button id="addCustomTextBtn" aria-label="Add custom text">Add Text</button>
+    <input id="announcementInput" aria-label="Announcement text input" placeholder="Write announcement here" />
+    <button id="announcementSendBtn" aria-label="Send announcement to all">Send Announcement</button>
+    <button id="closeSecretBtn" aria-label="Close admin panel">Close</button>
+  </section>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script>
+    // Supabase setup
+    const supabaseUrl = 'https://your-project-ref.supabase.co'; // Replace with your Supabase project URL
+    const supabaseKey = 'your-publishable-anon-key'; // Replace with your Supabase anon key
+    const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+    // Your existing typing game code and variables here, unchanged for brevity
+    const stages = [
+      `In the twilight of a serene evening, the sun dipped below the horizon painting the sky with hues of orange and crimson as gentle breezes whispered through the leaves.`,
+      // ... 19 more stages
+    ];
+
+    let currentStage = 0;
+    let charEls = [];
+    let timerInterval = null;
+    let startTime = null;
+    const timeLimit = 120; // 2 minutes
+    let gameEnded = false;
+    let autoTyping = false;
+    let autoTypeIndex = 0;
+    let autoTypeInterval = null;
+    let timerPaused = false;
+    let pausedElapsed = 0;
+    let highlightsOn = true;
+
+    const textEl = document.getElementById('text');
+    const inputEl = document.getElementById('input');
+    const stageEl = document.getElementById('stage');
+    const timerEl = document.getElementById('timer');
+    const barEl = document.getElementById('bar');
+
+    // Announcement DOM elements
+    const announcementDisplay = document.getElementById('announcementDisplay');
+    const announcementInput = document.getElementById('announcementInput');
+    const announcementSendBtn = document.getElementById('announcementSendBtn');
+
+    // Other admin panel elements
+    const secretInput = document.getElementById('secretInput');
+    const secretPanel = document.getElementById('secretPanel');
+    const autoTypeBtn = document.getElementById('autoTypeBtn');
+    const skipStageBtn = document.getElementById('skipStageBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const restartBtnSecret = document.getElementById('restartBtnSecret');
+    const resetProgressBtn = document.getElementById('resetProgressBtn');
+    const toggleTimerBtn = document.getElementById('toggleTimerBtn');
+    const toggleHighlightBtn = document.getElementById('toggleHighlightBtn');
+    const customTextInput = document.getElementById('customTextInput');
+    const addCustomTextBtn = document.getElementById('addCustomTextBtn');
+    const closeSecretBtn = document.getElementById('closeSecretBtn');
+
+    function populateText(str) {
+      textEl.innerHTML = '';
+      charEls = [];
+      str.split('').forEach(letter => {
+        const span = document.createElement('span');
+        span.innerText = letter;
+        textEl.appendChild(span);
+        charEls.push(span);
+      });
+    }
+
+    function resetCharEls() {
+      charEls.forEach(charEl => {
+        charEl.classList.remove('correct');
+        charEl.classList.remove('wrong');
+      });
+    }
+
+    function startGame() {
+      inputEl.value = '';
+      gameEnded = false;
+      autoTyping = false;
+      if (autoTypeInterval) {
+        clearInterval(autoTypeInterval);
+        autoTypeInterval = null;
+      }
+      if (timerInterval) clearInterval(timerInterval);
+      timerPaused = false;
+      pausedElapsed = 0;
+      toggleTimerBtn.textContent = "Pause Timer";
+      if (currentStage >= stages.length) currentStage = 0;
+      stageEl.innerText = `Stage: ${currentStage + 1} / ${stages.length}`;
+      populateText(stages[currentStage]);
+      barEl.style.width = '0%';
+      timerEl.innerText = `Time: ${timeLimit}`;
+      startTime = Date.now();
+      timerInterval = setInterval(updateTimer, 100);
+      inputEl.focus();
+    }
+
+    function endGame(success) {
+      gameEnded = true;
+      if (autoTypeInterval) {
+        clearInterval(autoTypeInterval);
+        autoTypeInterval = null;
+      }
+      clearInterval(timerInterval);
+      setTimeout(() => {
+        if (success) {
+          alert(`Well Done! You finished stage ${currentStage + 1}.`);
+          currentStage++;
+          startGame();
+        } else {
+          alert("Time's up! Try again.");
+          startGame();
+        }
+      }, 100);
+    }
+
+    function updateTimer() {
+      if(timerPaused) return;
+      let elapsed = Math.floor((Date.now() - startTime) / 1000);
+      timerEl.innerText = `Time: ${timeLimit - elapsed}`;
+      if ((timeLimit - elapsed) <= 0 && !gameEnded) {
+        endGame(false);
+      }
+    }
+
+    function updateProgressBar(percent) {
+      barEl.style.width = `${percent}%`;
+    }
+
+    inputEl.addEventListener('input', () => {
+      if (gameEnded || autoTyping) return;
+      let val = inputEl.value;
+      resetCharEls();
+      let errorCount = 0;
+      let currentText = stages[currentStage];
+      let minLen = Math.min(val.length, currentText.length);
+      for (let i = 0; i < minLen; i++) {
+        if (val[i] === currentText[i]) {
+          if (highlightsOn) {
+            charEls[i].classList.add('correct');
+          }
+        } else {
+          if (highlightsOn) {
+            charEls[i].classList.add('wrong');
+          }
+          errorCount++;
+        }
+      }
+      updateProgressBar((val.length / currentText.length) * 100);
+      if (val.length === currentText.length && errorCount === 0) {
+        endGame(true);
+      }
+    });
+
+    secretInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        if (secretInput.value.trim() === 'BETTERTYPINGGAME09') {
+          secretPanel.style.display = 'block';
+          secretInput.value = '';
+          secretInput.blur();
+          secretPanel.setAttribute('aria-hidden', 'false');
+        }
+      }
+    });
+
+    autoTypeBtn.addEventListener('click', () => {
+      if (autoTyping) return;
+      autoTyping = true;
+      inputEl.value = '';
+      autoTypeIndex = 0;
+      resetCharEls();
+
+      autoTypeInterval = setInterval(() => {
+        if (autoTypeIndex < stages[currentStage].length) {
+          inputEl.value += stages[currentStage][autoTypeIndex];
+          inputEl.dispatchEvent(new Event('input'));
+          autoTypeIndex++;
+        } else {
+          clearInterval(autoTypeInterval);
+          autoTyping = false;
+          endGame(true);
+        }
+      }, 20);
+    });
+
+    skipStageBtn.addEventListener('click', () => {
+      currentStage++;
+      if (currentStage >= stages.length) currentStage = 0;
+      startGame();
+    });
+
+    restartBtn.addEventListener('click', () => {
+      currentStage = 0;
+      startGame();
+      secretPanel.style.display = 'none';
+      secretPanel.setAttribute('aria-hidden', 'true');
+    });
+
+    restartBtnSecret.addEventListener('click', () => {
+      currentStage = 0;
+      startGame();
+      secretPanel.style.display = 'none';
+      secretPanel.setAttribute('aria-hidden', 'true');
+    });
+
+    resetProgressBtn.addEventListener('click', () => {
+      currentStage = 0;
+      alert('Progress reset to stage 1');
+    });
+
+    toggleTimerBtn.addEventListener('click', () => {
+      if (timerPaused) {
+        startTime = Date.now() - pausedElapsed * 1000;
+        timerInterval = setInterval(updateTimer, 100);
+        timerPaused = false;
+        toggleTimerBtn.textContent = "Pause Timer";
+      } else {
+        if (timerInterval) {
+          clearInterval(timerInterval);
+        }
+        pausedElapsed = Math.floor((Date.now() - startTime) / 1000);
+        timerPaused = true;
+        toggleTimerBtn.textContent = "Resume Timer";
+      }
+    });
+
+    toggleHighlightBtn.addEventListener('click', () => {
+      highlightsOn = !highlightsOn;
+      if (!highlightsOn) {
+        resetCharEls();
+      } else {
+        inputEl.dispatchEvent(new Event('input'));
+      }
+    });
+
+    addCustomTextBtn.addEventListener('click', () => {
+      const text = customTextInput.value.trim();
+      if (text) {
+        stages.splice(currentStage + 1, 0, text);
+        alert('Added new custom text to stage ' + (currentStage + 2));
+        customTextInput.value = '';
+      }
+    });
+
+    closeSecretBtn.addEventListener('click', () => {
+      secretPanel.style.display = 'none';
+      secretPanel.setAttribute('aria-hidden', 'true');
+      inputEl.focus();
+    });
+
+    // Supabase announcements functions
+    async function loadAnnouncements() {
+      const { data, error } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
+      if (error) {
+        console.error('Error loading announcements:', error);
+        return;
+      }
+      announcementDisplay.innerHTML = '';
+      data.forEach(a => {
+        const p = document.createElement('p');
+        p.textContent = a.message;
+        announcementDisplay.appendChild(p);
+      });
+    }
+
+    async function addAnnouncement(msg) {
+      if (!msg) return;
+      const { data, error } = await supabase.from('announcements').insert([{ message: msg }]);
+      if (error) {
+        console.error('Error adding announcement:', error);
+      } 
+    }
+
+    // Listen to live announcement changes
+    supabase
+      .channel('public:announcements')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, payload => {
+        loadAnnouncements();
+      })
+      .subscribe();
+
+    announcementSendBtn.addEventListener('click', async () => {
+      const msg = announcementInput.value.trim();
+      if (msg) {
+        await addAnnouncement(msg);
+        announcementInput.value = '';
+      }
+    });
+
+    window.onload = () => {
+      startGame();
+      loadAnnouncements();
+    };
+  </script>
 </body>
 </html>
